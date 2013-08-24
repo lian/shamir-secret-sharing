@@ -1,0 +1,75 @@
+= shamir-secret-sharing
+
+This is a ruby library for Shamir's Secret Sharing. ( http://en.wikipedia.org/wiki/Shamir's_Secret_Sharing )
+
+== Compatible with...
+
+* ruby 1.9.3
+* ruby 2.0.0
+
+
+== Installation
+
+We assume you already have a ruby 1.9 or 2.0 compatible interpreter and rubygems environment.
+
+ git clone https://github.com/lian/shamir-secret-sharing.git; cd shamir-secret-sharing
+ irb -Ilib -rshamir-secret-sharing
+
+if you want to have it available system-wide, just build the gem and install it:
+
+ gem build shamir-secret-sharing.gemspec && gem install shamir-secret-sharing-*.gem
+
+== Tests
+
+The tests can be run with
+
+ rake
+
+If you make changes to the code or add functionality, please also add tests.
+
+= Example
+
+== Split and Combine
+
+ # split a secret into 4 shares. 3 of them are needed to combine the secret again.
+ shares = ShamirSecretSharing::Base58.split(secret="hello", available=4, needed=3)
+ shares #=> ["FPGPdS98vRUCy9", "VmTjT28nES7Pck", "k9eRjVVpWP7uzj", "zXqDJNRpPttPjR"]
+
+ # combine the secret again using at least 3 shares
+ ShamirSecretSharing::Base58.combine( ["VmTjT28nES7Pck", "zXqDJNRpPttPjR", "k9eRjVVpWP7uzj"] )
+ #=> "hello"
+
+ # not enough shares
+ ShamirSecretSharing::Base58.combine( ["VmTjT28nES7Pck", "zXqDJNRpPttPjR"] )
+ #=> false
+
+ # wrong shares
+ ShamirSecretSharing::Base58.combine( ["VmTjT28nES7Pck", "zXqDJNRpPttPjR", "some-wrong-share"] )
+ #=> false
+
+== Encypt and Decrypt
+
+split and combine only work with secret below 512 bytes and the resulting share length grows linear. That means a 128 byte secret has a really long share length.
+encrypt and decrypt is used to encrypt a large blob of data while keeping the share length fixed. it does that by aes-256-cbc encrypting the data with a random key and only split and combining that fixed size key then.
+
+ # encrypt the data and create 4 shares where later 3 shares and the encrypted data is needed to decrypt it again. this example uses a 96 bit random key for encryption
+ shares, encrypted = ShamirSecretSharing::Base58.encrypt(data="Lorem ipsum dolor sit amet, consectetur adipiscing elit.", 4, 3, 96)
+ shares #=> ["3QZNRFYZHKUpnv96cE6eVwPP", "5p611mjtxXBgPDx1m2SRwCKr", "8DcdGMD9i3kWGrYEVGtQLSWA", "Ad9NLPDVSnHfbqVhnmNn8YK4"]
+ encrypted #=> "4PHcPwzzk48EjmusQz27t3X1rS7hAi9kwKgZJ7UMDR99rJgi19aHM8e7syh6uVrJ6HbcbgRmEUcR7hmkDvrYaJXH"
+
+ # combine the shares and decrypt the encrypted data
+ ShamirSecretSharing::Base58.decrypt(["3QZNRFYZHKUpnv96cE6eVwPP", "8DcdGMD9i3kWGrYEVGtQLSWA", "Ad9NLPDVSnHfbqVhnmNn8YK4"], "4PHcPwzzk48EjmusQz27t3X1rS7hAi9kwKgZJ7UMDR99rJgi19aHM8e7syh6uVrJ6HbcbgRmEUcR7hmkDvrYaJXH")
+ #=> "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+
+ # not enough shares
+ ShamirSecretSharing::Base58.decrypt(["3QZNRFYZHKUpnv96cE6eVwPP", "8DcdGMD9i3kWGrYEVGtQLSWA"], "4PHcPwzzk48EjmusQz27t3X1rS7hAi9kwKgZJ7UMDR99rJgi19aHM8e7syh6uVrJ6HbcbgRmEUcR7hmkDvrYaJXH")
+ #=> false
+
+ # wrong shares
+ ShamirSecretSharing::Base58.decrypt(["3QZNRFYZHKUpnv96cE6eVwPP", "8DcdGMD9i3kWGrYEVGtQLSWA", "some-wrong-share"], "4PHcPwzzk48EjmusQz27t3X1rS7hAi9kwKgZJ7UMDR99rJgi19aHM8e7syh6uVrJ6HbcbgRmEUcR7hmkDvrYaJXH")
+ #=> false
+
+ # wrong encrypted data
+ ShamirSecretSharing::Base58.decrypt(["3QZNRFYZHKUpnv96cE6eVwPP", "8DcdGMD9i3kWGrYEVGtQLSWA", "Ad9NLPDVSnHfbqVhnmNn8YK4"], "wrong-encrypted-data")
+ #=> false
+
