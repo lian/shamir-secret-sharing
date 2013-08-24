@@ -49,9 +49,9 @@ class ShamirSecretSharing
     shares = unpack(shares)
     prime = smallest_prime_of_bytelength(shares[0][1])
 
-    secret = shares.inject(OpenSSL::BN.new("0")){|secret,share|
-      l_x = l(share[0], shares, prime)
-      summand = OpenSSL::BN.new(share[2].to_s).mod_mul(l_x, prime)
+    secret = shares.inject(OpenSSL::BN.new("0")){|secret,(x,num_bytes,y)|
+      l_x = l(x, shares, prime)
+      summand = OpenSSL::BN.new(y.to_s).mod_mul(l_x, prime)
       secret = (secret + summand) % prime
     }
     if do_data_checksum
@@ -68,10 +68,10 @@ class ShamirSecretSharing
   # Part of the Lagrange interpolation.
   # This is l_j(0), i.e.  # \prod_{x_j \neq x_i} \frac{-x_i}{x_j - x_i}
   # for more information compare Wikipedia: # http://en.wikipedia.org/wiki/Lagrange_form
-  def self.l(x, shares, prime)
-    shares.select{ |s| s[0] != x }.map{|s|
-      minus_xi = OpenSSL::BN.new((-s[0]).to_s)
-      one_over_xj_minus_xi = OpenSSL::BN.new((x - s[0]).to_s).mod_inverse(prime)
+  def self.l(current_x, shares, prime)
+    shares.select{|x,num_bytes,y| x != current_x }.map{|x,num_bytes,y|
+      minus_xi = OpenSSL::BN.new((-x).to_s)
+      one_over_xj_minus_xi = OpenSSL::BN.new((current_x - x).to_s).mod_inverse(prime)
       minus_xi.mod_mul(one_over_xj_minus_xi, prime)
     }.inject{|p,f| p.mod_mul(f, prime) }
   end
@@ -122,19 +122,17 @@ class ShamirSecretSharing
 
   class Packed < ShamirSecretSharing # packing format and checkum
     def self.pack(shares)
-      #shares.map{|i| encode( [ i[0], i[1], i[2].to_s(16) ].pack("CnH*") ) }
-      shares.map{|i|
-        buf = [ i[0], i[1], i[2].to_s(16) ].pack("CnH*")
+      shares.map{|x,num_bytes,y|
+        buf = [ x, num_bytes, y.to_s(16) ].pack("CnH*")
         checksum = Digest::SHA512.digest(buf)[0...2]
-        encode( buf << checksum )
+        encode(checksum << buf)
       }
     end
     def self.unpack(shares)
-      #shares.map{|i| i = decode(i).unpack("CnH*"); [ i[0], i[1], i[2].to_i(16) ] }
       shares.map{|i|
         buf = decode(i) rescue nil
         raise ShareDecodeError, "share: #{i}" unless buf
-        buf, checksum = buf[0...-2], buf[-2..-1]
+        checksum, buf = buf.unpack("a2a*")
         raise ShareChecksumError, "share: #{i}" unless checksum == Digest::SHA512.digest(buf)[0...2]
         i = buf.unpack("CnH*"); [ i[0], i[1], i[2].to_i(16) ]
       }
@@ -230,7 +228,7 @@ if $0 == __FILE__
       }
     end
 
-    def test_shamir_base58_encrypt
+    def test_shamir_base64_encrypt
       text = "A"*32
       helper{|available,needed|
         shares, encrypted = ShamirSecretSharing::Base64.encrypt(text, available, needed, 96)
