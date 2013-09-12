@@ -15,7 +15,7 @@ We assume you already have a ruby 1.9 or 2.0 compatible interpreter and rubygems
  git clone https://github.com/lian/shamir-secret-sharing.git; cd shamir-secret-sharing
  irb -Ilib -rshamir-secret-sharing
 
-if you want to have it available system-wide, just build the gem and install it:
+If you want to have it available system-wide, just build the gem and install it:
 
  gem build shamir-secret-sharing.gemspec && gem install shamir-secret-sharing-*.gem
 
@@ -49,10 +49,10 @@ If you make changes to the code or add functionality, please also add tests.
 
 == Encypt and Decrypt
 
-split and combine only work with secret below 512 bytes and the resulting share length grows linear. That means a 128 byte secret has a really long share length.
-encrypt and decrypt is used to encrypt a large blob of data while keeping the share length fixed. it does that by aes-256-cbc encrypting the data with a random key and only split and combining that fixed size key then.
+Split and combine only work with a secret length below 512 bytes and the resulting share lengths are equivalent to the secret length. That means a 128 byte secret has a very long (128 byte) share length.
+Encrypt and decrypt are used to encrypt a large piece of data while keeping the share lengths to a fixed and reasonable size. It does that by AES-256-CBC encrypting the data with a random key and only then splitting that fixed size key into shares.
 
- # encrypt the data and create 4 shares where later 3 shares and the encrypted data is needed to decrypt it again. this example uses a 96 bit random key for encryption
+ # encrypt the data and create 4 shares. Later 3 shares and the encrypted data are needed to decrypt it again. This example uses a 96 bit random key for encryption.
  shares, encrypted = ShamirSecretSharing::Base58.encrypt(data="Lorem ipsum dolor sit amet, consectetur adipiscing elit.", 4, 3, 96)
  shares #=> ["3QZNRFYZHKUpnv96cE6eVwPP", "5p611mjtxXBgPDx1m2SRwCKr", "8DcdGMD9i3kWGrYEVGtQLSWA", "Ad9NLPDVSnHfbqVhnmNn8YK4"]
  encrypted #=> "4PHcPwzzk48EjmusQz27t3X1rS7hAi9kwKgZJ7UMDR99rJgi19aHM8e7syh6uVrJ6HbcbgRmEUcR7hmkDvrYaJXH"
