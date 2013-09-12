@@ -21,11 +21,11 @@ class ShamirSecretSharing
     raise ArgumentError, "available must be <= 250"    unless available <= 250
 
     if do_data_checksum
-      checksum = Digest::SHA512.digest(secret)[0]
-      num_bytes = secret.bytesize+1
+      checksum = Digest::SHA512.digest(secret)[0...2]
+      num_bytes = secret.bytesize+2
       secret = OpenSSL::BN.new((checksum + secret).unpack("H*")[0], 16) rescue OpenSSL::BN.new("0")
       #num_bytes = secret.to_s(0).unpack("N")[0]
-      raise ArgumentError, "bytelength of secret must be >= 1"   if num_bytes < 2
+      raise ArgumentError, "bytelength of secret must be >= 1"   if num_bytes < 3
       raise ArgumentError, "bytelength of secret must be <= 512" if num_bytes > 513
     else
       num_bytes = secret.bytesize
@@ -59,8 +59,8 @@ class ShamirSecretSharing
       secret = (secret + summand) % prime
     }
     if do_data_checksum
-      checksum, secret = [ secret.to_s(16).rjust(num_bytes*2, '0') ].pack("H*").unpack("aa*")
-      checksum == Digest::SHA512.digest(secret)[0] ? secret : false
+      checksum, secret = [ secret.to_s(16).rjust(num_bytes*2, '0') ].pack("H*").unpack("a2a*")
+      checksum == Digest::SHA512.digest(secret)[0...2] ? secret : false
     else
       secret = [ secret.to_s(16).rjust(num_bytes*2, '0') ].pack("H*")
     end
@@ -267,6 +267,27 @@ if $0 == __FILE__
 
       shares, encrypted = ShamirSecretSharing::Base58.encrypt_with_sanity_check(text, available=3, needed=2)
       assert_equal text, ShamirSecretSharing::Base58.decrypt(shares.shuffle[0...needed], encrypted)
+    end
+
+    def test_shamir_base58_encrypt_sanity_checks
+      klass = ShamirSecretSharing::Base58
+      checks, success = 5, true
+      [
+        [2,3], [2,4], [3,5]
+      ].each{|needed,available|
+        checks.times{
+          data = "A"*32
+          shares, encrypted = klass.encrypt(data, available, needed, 96)
+          needed.upto(available).each{|n|
+            shares.permutation(n).each{|shares| success = false if klass.decrypt(shares, encrypted, true) != data }
+          }
+          (needed-1).downto(2).each{|n|
+            shares.permutation(n).each{|shares| success = false if klass.decrypt(shares, encrypted, true) != false }
+          }
+          break unless success
+        }
+      }
+      assert_equal true, success
     end
 
     def test_shamir_base64_encrypt
