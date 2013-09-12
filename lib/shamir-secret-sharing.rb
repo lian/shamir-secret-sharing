@@ -167,8 +167,16 @@ class ShamirSecretSharing
   end
 
   class Base58 < Packed
-    def self.encode(string); int_to_base58( string.unpack("H*")[0].to_i(16) ); end
-    def self.decode(string); [ OpenSSL::BN.new(base58_to_int(string).to_s).to_s(16) ].pack("H*"); end
+    def self.encode(string)
+      string = string.unpack("H*")[0]
+      leading_zero_bytes  = (string.match(/^([0]+)/) ? $1 : '').size / 2
+      ("1"*leading_zero_bytes) + int_to_base58( string.to_i(16) )
+    end
+    def self.decode(string)
+      leading_zero_bytes = (string.match(/^([1]+)/) ? $1 : '').size
+      buf = base58_to_int(string).to_s(16); buf = (buf.bytesize.odd? ? '0'+buf : buf)
+      [ ("00"*leading_zero_bytes) + buf ].pack("H*")
+    end
     def self.int_to_base58(int_val, leading_zero_bytes=0)
       alpha, base58_val, base = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz", "", 58
       while int_val > 0
