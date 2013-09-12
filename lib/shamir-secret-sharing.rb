@@ -101,6 +101,28 @@ class ShamirSecretSharing
     false
   end
 
+  def self.split_with_sanity_check(secret, available, needed, do_data_checksum=true)
+    shares = split(secret, available, needed, do_data_checksum)
+    success = true
+    needed.upto(available).each{|n| shares.permutation(n).each{|shares| success = false if combine(shares) != secret } }
+    (needed-1).downto(2).each{|n| shares.permutation(n).each{|shares| success = false if combine(shares) != false } }
+    raise ShareSanityCheckError if success != true
+    shares
+  rescue ShareSanityCheckError
+    retry
+  end
+
+  def self.encrypt_with_sanity_check(data, available, needed, key_bit_length=128)
+    shares, encrypted = encrypt(data, available, needed, key_bit_length)
+    success = true
+    needed.upto(available).each{|n| shares.permutation(n).each{|shares| success = false if decrypt(shares, encrypted) != data } }
+    (needed-1).downto(2).each{|n| shares.permutation(n).each{|shares| success = false if decrypt(shares, encrypted) != false } }
+    raise ShareSanityCheckError if success != true
+    [shares, encrypted]
+  rescue ShareSanityCheckError
+    retry
+  end
+
 
   class Number < ShamirSecretSharing
     def self.split(secret, available, needed)
@@ -119,6 +141,7 @@ class ShamirSecretSharing
 
   class ShareChecksumError < ::StandardError; end
   class ShareDecodeError < ::StandardError; end
+  class ShareSanityCheckError < ::StandardError; end
 
   class Packed < ShamirSecretSharing # packing format and checkum
     def self.pack(shares)
@@ -196,6 +219,9 @@ if $0 == __FILE__
         shares = ShamirSecretSharing::Base58.split(secret, available, needed)
         assert_equal secret, ShamirSecretSharing::Base58.combine(shares.shuffle[0...needed])
       }
+
+      shares = ShamirSecretSharing::Base58.split_with_sanity_check(secret, available=3, needed=2)
+      assert_equal secret, ShamirSecretSharing::Base58.combine(shares.shuffle[0...needed])
     end
 
     def test_shamir_base64
@@ -226,6 +252,9 @@ if $0 == __FILE__
         shares, encrypted = ShamirSecretSharing::Base58.encrypt(text, available, needed, 96)
         assert_equal text, ShamirSecretSharing::Base58.decrypt(shares.shuffle[0...needed], encrypted)
       }
+
+      shares, encrypted = ShamirSecretSharing::Base58.encrypt_with_sanity_check(text, available=3, needed=2)
+      assert_equal text, ShamirSecretSharing::Base58.decrypt(shares.shuffle[0...needed], encrypted)
     end
 
     def test_shamir_base64_encrypt
