@@ -22,24 +22,27 @@ class ShamirSecretSharing
 
     if do_data_checksum
       checksum = Digest::SHA512.digest(secret)[0]
+      num_bytes = secret.bytesize+1
       secret = OpenSSL::BN.new((checksum + secret).unpack("H*")[0], 16) rescue OpenSSL::BN.new("0")
-      raise ArgumentError, "bytelength of secret must be >= 1"   if secret.num_bytes < 2
-      raise ArgumentError, "bytelength of secret must be <= 512" if secret.num_bytes > 513
+      #num_bytes = secret.to_s(0).unpack("N")[0]
+      raise ArgumentError, "bytelength of secret must be >= 1"   if num_bytes < 2
+      raise ArgumentError, "bytelength of secret must be <= 512" if num_bytes > 513
     else
+      num_bytes = secret.bytesize
       secret = OpenSSL::BN.new(secret.unpack("H*")[0], 16) rescue OpenSSL::BN.new("0") # without checksum
-      raise ArgumentError, "bytelength of secret must be >= 1"   if secret.num_bytes < 1
-      raise ArgumentError, "bytelength of secret must be <= 512" if secret.num_bytes > 512
+      raise ArgumentError, "bytelength of secret must be >= 1"   if num_bytes < 1
+      raise ArgumentError, "bytelength of secret must be <= 512" if num_bytes > 512
     end
 
-    prime  = smallest_prime_of_bytelength(secret.num_bytes)
-    coef = [ secret ] + Array.new(needed-1){ OpenSSL::BN.rand(secret.num_bytes * 8) }
+    prime  = smallest_prime_of_bytelength(num_bytes)
+    coef = [ secret ] + Array.new(needed-1){ OpenSSL::BN.rand(num_bytes * 8) }
 
     shares = (1..available).map{|x|
       x = OpenSSL::BN.new(x.to_s)
       y = coef.each_with_index.inject(OpenSSL::BN.new("0")){|acc, (c, idx)|
         acc + c * x.mod_exp(idx, prime)
       } % prime
-      [x, secret.num_bytes, y]
+      [x, num_bytes, y]
     }
     pack(shares)
   end
@@ -47,7 +50,8 @@ class ShamirSecretSharing
   def self.combine(shares, do_raise=false, do_data_checksum=true)
     return false if shares.size < 2
     shares = unpack(shares)
-    prime = smallest_prime_of_bytelength(shares[0][1])
+    num_bytes = shares[0][1]
+    prime = smallest_prime_of_bytelength(num_bytes)
 
     secret = shares.inject(OpenSSL::BN.new("0")){|secret,(x,num_bytes,y)|
       l_x = l(x, shares, prime)
@@ -55,10 +59,10 @@ class ShamirSecretSharing
       secret = (secret + summand) % prime
     }
     if do_data_checksum
-      checksum, secret = [ secret.to_s(16) ].pack("H*").unpack("aa*")
+      checksum, secret = [ secret.to_s(16).rjust(num_bytes*2, '0') ].pack("H*").unpack("aa*")
       checksum == Digest::SHA512.digest(secret)[0] ? secret : false
     else
-      secret = [ secret.to_s(16) ].pack("H*")
+      secret = [ secret.to_s(16).rjust(num_bytes*2, '0') ].pack("H*")
     end
   rescue ShareChecksumError, ShareDecodeError => ex
     raise if do_raise
